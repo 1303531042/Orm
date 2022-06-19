@@ -1,0 +1,94 @@
+JDBC六部曲
+1.导包
+2.加载驱动Class.forName("com.mysql.cj.jdbc.Driver")
+3.获取连接Connection conn = Driver.getConnection("jdbc:mysql://localhost:3306/数据库名？",user,password)
+4.创建状态参数PreparedStatement statement=conn.preparedStatement("sql")
+5.执行操作 ResultSet rs = statement.executeQuery();executeUpdate()
+6.关闭 rs.close() statement.close() conn.close()
+
+
+对Model的优化
+
+冗余：Dao层每个方法都会写一遍JDBC六部曲----封装ORM框架
+性能：每个方法都要创建连接执行完就销毁太浪费-----封装一个连接池
+
+
+连接池：
+    执行创建连接的部分性能很忙
+    创建连接后用完后连接关闭 而其他方法又创建连接 很浪费资源
+
+    解决问题思路:
+    预先创建几个连接 留着复用
+
+    出现的问题：
+    1.连接是否可被用如何知道？
+    连接身上应该有一个属性-用于描述是否可用的状态
+
+    2. Connection并不是我们写的类，那如何把这个状态与连接绑定在一起？
+    聚合 写一个MyConnection将connection与状态同时放在我们写的类上
+
+    3.还需要一个类ConnectionPool来管理这些MyConnection IOC
+    -----------------------------------------------------------------
+    新的问题：
+    1.数据库各种参数不能更改 账号密码 使用的数据库------使用读文件的形式 properties文件 并将文件缓存
+    2.连接池对象不需要很多个------单例模式
+    3.连接池并发访问安全问题------同步锁
+    4.连接用完怎么办-----等待机制
+    5.连接不够怎么办-----扩容
+    6.现在的使用方式与之前完全不一样-----静态代理模式（偷梁换柱 用户还是用的原来的方式但实际内容都被改了）
+            真实类和代理类都实现了一个相同的接口---->接口目的让两个类的方法一致(一个接口两个对象)
+            代理类存了一个真实类的属性---->代理类相当于经纪人，真实类相当于艺人
+            调用方法时只能用接口描述的方法
+            执行的时候是代理类重写的方法
+            执行的时候在代理类找不到重写的方法时再去找真实对象去执行
+            偷梁换柱
+
+
+
+ORM：
+
+    注册账号
+    页面填写 sid  sname spassword
+    点击注册
+    发送请求 4个字符串参数发给服务器
+    控制层 接受四个字符串 组合成一个对象
+    业务层 完整的对象
+    持久层 完整的对象
+        jdbc+sql
+        sql setObject 对象的值
+    1.dao层每个方法都要执行一遍六部曲，代码冗余
+    封装一个类，支持增删改查的操作
+
+    2.方法参数？
+    String 带'？'的sql ，对象（含有需要赋给？的值）
+
+    3.？与对象哪个属性时相对应的，对象的属性时没有顺序的也不能想数组一样按顺序来啊？
+    根源： sql的'？'的语义我们不知道
+    解决方法：我们需要特殊的sql来获取'?'的语义 然后在拼接成正常的sql
+    insert into student values(#{sid},#{sname}); 拆分字符串 将 sid ,sname按顺序存储起来
+    再拼接成正常sql insert into student values(？,？);
+
+    4.select如何处理结果集
+    将结果集的数据取出来放在一个domain对象 或 Map<domain>
+
+    5.dao层每个方法就是调用一下session的方法，怎么样省去这一步
+    动态代理，代理的是方法 ，代驾，代理的必须是个接口（一个接口一个代理对象）相当于代驾
+
+    Proxy.newProxyInstance(ClassLoader,Class[],InvocationHandler)
+
+    InvocationHandler{
+    proxy dao对象 method被调用方法 args调用方法时传进来的参数
+    public Object invoke(Object proxy,Method method,Object[] args)
+    }
+
+
+
+
+
+
+
+
+
+
+
+
